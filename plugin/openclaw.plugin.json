@@ -1,0 +1,22 @@
+{
+  "id": "memory-pgvector",
+  "kind": "memory",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "databaseUrl": { "type": "string", "description": "PostgreSQL connection URL" },
+      "schema": { "type": "string", "description": "Schema name (default: public)" },
+      "embedding": {
+        "type": "object",
+        "properties": {
+          "apiKey": { "type": "string" },
+          "model": { "type": "string" },
+          "baseUrl": { "type": "string" }
+        },
+        "required": ["apiKey"]
+      }
+    },
+    "required": ["databaseUrl", "embedding"]
+  }
+}
