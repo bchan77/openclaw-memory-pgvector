@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { Type } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
 import { PgMemoryManager } from "./pg-manager.js";
 
 const configSchema = Type.Object({
@@ -18,6 +19,17 @@ const configSchema = Type.Object({
     baseUrl: Type.Optional(Type.String()),
   }),
 });
+
+type PluginConfig = {
+  databaseUrl: string;
+  schema?: string;
+  embedding: { apiKey: string; model?: string; baseUrl?: string };
+};
+
+function parsePluginConfig(value: unknown): PluginConfig {
+  Value.Assert(configSchema, value);
+  return value as PluginConfig;
+}
 
 function resolveWorkspaceDir(config: Record<string, unknown>, agentId: string): string {
   const agents = config.agents as Record<string, unknown> | undefined;
@@ -58,11 +70,7 @@ const plugin = {
   configSchema: configSchema as unknown as Record<string, unknown>,
 
   register(api: OpenClawPluginApi) {
-    const cfg = configSchema.parse(api.pluginConfig) as {
-      databaseUrl: string;
-      schema?: string;
-      embedding: { apiKey: string; model?: string; baseUrl?: string };
-    };
+    const cfg = parsePluginConfig(api.pluginConfig);
     const schema = cfg.schema ?? "public";
 
     const managerCache = new Map<string, PgMemoryManager>();

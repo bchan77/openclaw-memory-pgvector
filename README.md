@@ -118,6 +118,12 @@ This repo includes an **OpenClaw memory plugin** that backs `memory_search` and 
 
 **CLI note:** `openclaw memory status` and `openclaw memory search` use the built-in (SQLite) backend only; they do not query the plugin. When the slot is `memory-pgvector`, only the **agent** (gateway) uses Postgres for memory_search/memory_get. To confirm the plugin is active: run `openclaw config get plugins.slots.memory` (should print `memory-pgvector`) and ensure the gateway has been restarted. To verify Postgres is used, trigger memory via the agent (e.g. ask the bot something that requires recall) or check Postgres query activity while the agent runs.
 
+### Working example (YugabyteDB)
+
+The pgvector plugin stores chunks and embeddings in Postgres/YugabyteDB. Below: agent memory search returning sample chunks, and tool confirmation that the database tables (`chunks`, `embedding_cache`) are populated with embeddings (pgvector `vector` type).
+
+![pgvector plugin working with YugabyteDB](docs/pgvector-yugabyte-working.png)
+
 ## License
 
 MIT
