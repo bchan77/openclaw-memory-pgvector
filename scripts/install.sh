@@ -105,6 +105,8 @@ if [ "$RUN_MIGRATE" = true ]; then
   if [ -z "${DATABASE_URL:-}" ]; then
     echo "No DATABASE_URL or --pg provided. Enter Postgres connection details (optional schema for migration)."
     echo ""
+    # Disable history expansion so passwords (or values) containing ! are read literally
+    set +H
     read -r -p "Host [localhost]: " PGHOST
     PGHOST=${PGHOST:-localhost}
     read -r -p "Port [5432]: " PGPORT
@@ -121,6 +123,7 @@ if [ "$RUN_MIGRATE" = true ]; then
     if [ -n "$PGSCHEMA_PROMPT" ]; then
       SCHEMA="$PGSCHEMA_PROMPT"
     fi
+    export PGHOST PGPORT PGDATABASE PGUSER PGPASSWORD
     DATABASE_URL=$(node -e "
       const enc = encodeURIComponent;
       const h = process.env.PGHOST || 'localhost';
@@ -159,30 +162,34 @@ if [ "$RUN_MIGRATE" = true ]; then
   echo ""
 
   # Install plugin and set OpenClaw config (if openclaw is in PATH and we have DATABASE_URL)
+  # Set plugin entry config first so validation passes when we run "plugins install --link".
   if [ -n "${DATABASE_URL:-}" ] && command -v openclaw >/dev/null 2>&1; then
     echo "=== Installing memory-pgvector plugin and configuring OpenClaw ==="
-    if openclaw plugins install "$REPO_ROOT" --link 2>/dev/null; then
-      echo "  Plugin linked (plugins.load.paths)."
-    else
-      echo "  Could not link plugin; you may need to run: openclaw plugins install $REPO_ROOT --link"
-    fi
     CONFIG_FAILED=""
-    if ! openclaw config set plugins.slots.memory memory-pgvector 2>/dev/null; then
+    if ! openclaw config set 'plugins.entries.memory-pgvector.config.databaseUrl' "$DATABASE_URL" 2>&1; then
       CONFIG_FAILED=1
     fi
-    if [ -z "$CONFIG_FAILED" ]; then
-      if ! openclaw config set 'plugins.entries.memory-pgvector.config.databaseUrl' "$DATABASE_URL" 2>/dev/null; then
-        CONFIG_FAILED=1
-      fi
-    fi
     if [ -z "$CONFIG_FAILED" ] && [ "$SCHEMA" != "public" ]; then
-      if ! openclaw config set 'plugins.entries.memory-pgvector.config.schema' "$SCHEMA" 2>/dev/null; then
+      if ! openclaw config set 'plugins.entries.memory-pgvector.config.schema' "$SCHEMA" 2>&1; then
         CONFIG_FAILED=1
       fi
     fi
     if [ -n "${OPENAI_API_KEY:-}" ] && [ -z "$CONFIG_FAILED" ]; then
-      if ! openclaw config set 'plugins.entries.memory-pgvector.config.embedding.apiKey' "$OPENAI_API_KEY" 2>/dev/null; then
-        : # embedding key optional; user can set in UI or later
+      if ! openclaw config set 'plugins.entries.memory-pgvector.config.embedding.apiKey' "$OPENAI_API_KEY" 2>&1; then
+        : # optional; user can set in UI or later
+      fi
+    else
+      # Schema requires embedding.apiKey; set placeholder so "plugins install --link" validation passes
+      openclaw config set 'plugins.entries.memory-pgvector.config.embedding.apiKey' '' 2>/dev/null || true
+    fi
+    if ! openclaw plugins install "$REPO_ROOT" --link 2>&1; then
+      echo "  Could not link plugin; you may need to run: openclaw plugins install $REPO_ROOT --link"
+    else
+      echo "  Plugin linked (plugins.load.paths)."
+    fi
+    if [ -z "$CONFIG_FAILED" ]; then
+      if ! openclaw config set plugins.slots.memory memory-pgvector 2>&1; then
+        CONFIG_FAILED=1
       fi
     fi
     if [ -n "$CONFIG_FAILED" ]; then

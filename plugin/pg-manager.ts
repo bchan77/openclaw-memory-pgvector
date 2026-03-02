@@ -6,7 +6,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import pg from "pg";
-import pgvector from "pgvector";
+import pgvector from "pgvector/pg";
 import { CHUNKS_TABLE, META_TABLE } from "../scripts/schema-pg.js";
 
 const META_KEY = "memory_index_meta_v1";
@@ -50,7 +50,9 @@ export class PgMemoryManager {
 
   constructor(config: PgManagerConfig) {
     this.pool = new pg.Pool({ connectionString: config.databaseUrl });
-    pgvector.extend(this.pool);
+    this.pool.on("connect", async (client: pg.PoolClient) => {
+      await pgvector.registerTypes(client);
+    });
     this.schema = config.schema;
     this.workspaceDir = config.workspaceDir;
     this.agentId = config.agentId;

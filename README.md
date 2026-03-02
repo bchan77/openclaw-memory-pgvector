@@ -1,5 +1,7 @@
 # openclaw-memory-pgvector
 
+**BETA** — This plugin is still in beta and may not work in all environments. Use at your own risk.
+
 OpenClaw **memory plugin** backed by PostgreSQL or YugabyteDB (pgvector) for semantic memory search. Use the plugin and OpenClaw uses Postgres for memory at runtime; no migration required unless you want to copy existing SQLite memory into Postgres.
 
 ## Installation (use the plugin)
@@ -113,6 +115,8 @@ CREATE EXTENSION IF NOT EXISTS vector;
 This repo includes an **OpenClaw memory plugin** that backs `memory_search` and `memory_get` with Postgres/pgvector. When you run the install script with migration, it links the plugin, sets `plugins.slots.memory = "memory-pgvector"`, and sets plugin config (databaseUrl, schema, and embedding.apiKey from OPENAI_API_KEY if set). OpenClaw then uses the plugin for memory; set **embedding** (API key and optionally model) in plugin config so the plugin can embed search queries. Restart the gateway after changing the memory slot or plugin config.
 
 **Manual setup:** `openclaw plugins install /path/to/openclaw-memory-pgvector --link`, then `openclaw config set plugins.slots.memory memory-pgvector` and set `plugins.entries.memory-pgvector.config.databaseUrl` and `plugins.entries.memory-pgvector.config.embedding.apiKey`.
+
+**CLI note:** `openclaw memory status` and `openclaw memory search` use the built-in (SQLite) backend only; they do not query the plugin. When the slot is `memory-pgvector`, only the **agent** (gateway) uses Postgres for memory_search/memory_get. To confirm the plugin is active: run `openclaw config get plugins.slots.memory` (should print `memory-pgvector`) and ensure the gateway has been restarted. To verify Postgres is used, trigger memory via the agent (e.g. ask the bot something that requires recall) or check Postgres query activity while the agent runs.
 
 ## License
 

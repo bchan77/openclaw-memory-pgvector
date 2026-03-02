@@ -20,12 +20,19 @@
 
 import Database from "better-sqlite3";
 import pg from "pg";
-import { PoolConfig } from "pg";
-import pgvector from "pgvector";
+import type { PoolConfig } from "pg";
+import pgvector from "pgvector/pg";
 import { createSchemaSql, EMBEDDING_CACHE_TABLE, FILES_TABLE, CHUNKS_TABLE, META_TABLE } from "./schema-pg.js";
 
 const META_KEY = "memory_index_meta_v1";
 const DEFAULT_AGENT_ID = "main";
+
+/** Coerce value to integer for Postgres BIGINT/INTEGER. SQLite may return timestamps as REAL. */
+function toInt(v: number | null | undefined): number {
+  if (v == null) return 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.floor(n) : 0;
+}
 
 function getDefaultSqlitePath(agentId: string): string {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
@@ -204,7 +211,6 @@ async function main(): Promise<void> {
 
   const poolConfig: PoolConfig = typeof pgUrl === "string" ? { connectionString: pgUrl } : pgUrl;
   const pool = new pg.Pool(poolConfig);
-  pgvector.extend(pool);
 
   function quoteIdent(name: string): string {
     return `"${name.replace(/"/g, '""')}"`;
@@ -212,6 +218,7 @@ async function main(): Promise<void> {
 
   const client = await pool.connect();
   try {
+    await pgvector.registerTypes(client);
     if (schema !== "public") {
       await client.query(`CREATE SCHEMA IF NOT EXISTS ${quoteIdent(schema)}`);
       await client.query(`SET search_path TO ${quoteIdent(schema)}`);
@@ -237,7 +244,7 @@ async function main(): Promise<void> {
     for (const row of files) {
       await client.query(
         `INSERT INTO ${FILES_TABLE} (path, source, hash, mtime, size) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (path) DO UPDATE SET source = EXCLUDED.source, hash = EXCLUDED.hash, mtime = EXCLUDED.mtime, size = EXCLUDED.size`,
-        [row.path, row.source, row.hash, row.mtime, row.size],
+        [row.path, row.source, row.hash, toInt(row.mtime), toInt(row.size)],
       );
     }
     console.log("  Written files");
@@ -250,7 +257,7 @@ async function main(): Promise<void> {
       }
       await client.query(
         `INSERT INTO ${CHUNKS_TABLE} (id, path, source, start_line, end_line, hash, model, text, embedding, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::vector, $10) ON CONFLICT (id) DO UPDATE SET path = EXCLUDED.path, source = EXCLUDED.source, start_line = EXCLUDED.start_line, end_line = EXCLUDED.end_line, hash = EXCLUDED.hash, model = EXCLUDED.model, text = EXCLUDED.text, embedding = EXCLUDED.embedding, updated_at = EXCLUDED.updated_at`,
-        [row.id, row.path, row.source, row.start_line, row.end_line, row.hash, row.model, row.text, pgVectorFormat(vec), row.updated_at],
+        [row.id, row.path, row.source, toInt(row.start_line), toInt(row.end_line), row.hash, row.model, row.text, pgVectorFormat(vec), toInt(row.updated_at)],
       );
     }
     console.log("  Written chunks");
@@ -260,7 +267,7 @@ async function main(): Promise<void> {
       if (vec.length !== vectorDims) continue;
       await client.query(
         `INSERT INTO ${EMBEDDING_CACHE_TABLE} (provider, model, provider_key, hash, embedding, dims, updated_at) VALUES ($1, $2, $3, $4, $5::vector, $6, $7) ON CONFLICT (provider, model, provider_key, hash) DO UPDATE SET embedding = EXCLUDED.embedding, dims = EXCLUDED.dims, updated_at = EXCLUDED.updated_at`,
-        [row.provider, row.model, row.provider_key, row.hash, pgVectorFormat(vec), row.dims, row.updated_at],
+        [row.provider, row.model, row.provider_key, row.hash, pgVectorFormat(vec), row.dims != null ? toInt(row.dims) : null, toInt(row.updated_at)],
       );
     }
     console.log("  Written embedding_cache");

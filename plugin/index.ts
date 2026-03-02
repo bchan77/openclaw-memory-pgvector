@@ -87,14 +87,8 @@ const plugin = {
 
     api.registerTool(
       (ctx) => {
-        const getConfig = (): Record<string, unknown> => {
-          try {
-            const loaded = api.config.loadConfig();
-            return (loaded as Record<string, unknown>) ?? {};
-          } catch {
-            return (ctx as { config?: Record<string, unknown> }).config ?? {};
-          }
-        };
+        const getConfig = (): Record<string, unknown> =>
+          (api.config as Record<string, unknown>) ?? (ctx as { config?: Record<string, unknown> }).config ?? {};
         return [
           {
             name: "memory_search",
